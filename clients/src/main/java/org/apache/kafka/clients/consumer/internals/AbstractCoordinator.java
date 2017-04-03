@@ -888,9 +888,7 @@ public abstract class AbstractCoordinator implements Closeable {
                         long now = time.milliseconds();
 
                         if (coordinatorUnknown()) {
-                            if (findCoordinatorFuture == null)
-                                lookupCoordinator();
-                            else
+                            if (findCoordinatorFuture == null || lookupCoordinator().failed())
                                 AbstractCoordinator.this.wait(retryBackoffMs);
                         } else if (heartbeat.sessionTimeoutExpired(now)) {
                             // the session timeout has expired without seeing a successful heartbeat, so we should
