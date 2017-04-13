@@ -19,10 +19,19 @@ package org.apache.kafka.common.security.ssl;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
-import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.network.Mode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.io.FileInputStream;
+import javax.net.ssl.KeyManager;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLParameters;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
@@ -30,14 +39,8 @@ import java.security.SecureRandom;
 import java.util.List;
 import java.util.Map;
 
-import javax.net.ssl.KeyManager;
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLEngine;
-import javax.net.ssl.SSLParameters;
-import javax.net.ssl.TrustManagerFactory;
-
 public class SslFactory implements Configurable {
+    private static final Logger log = LoggerFactory.getLogger(SslFactory.class);
 
     private final Mode mode;
     private final String clientAuthConfigOverride;
@@ -135,7 +138,7 @@ public class SslFactory implements Configurable {
             String kmfAlgorithm = this.kmfAlgorithm != null ? this.kmfAlgorithm : KeyManagerFactory.getDefaultAlgorithm();
             KeyManagerFactory kmf = KeyManagerFactory.getInstance(kmfAlgorithm);
             KeyStore ks = keystore.load();
-            Password keyPassword = this.keyPassword != null ? this.keyPassword : keystore.password;
+            Password keyPassword = this.keyPassword != null ? this.keyPassword : keystore.getPassword();
             kmf.init(ks, keyPassword.value().toCharArray());
             keyManagers = kmf.getKeyManagers();
         }
@@ -145,7 +148,21 @@ public class SslFactory implements Configurable {
         KeyStore ts = truststore == null ? null : truststore.load();
         tmf.init(ts);
 
-        sslContext.init(keyManagers, tmf.getTrustManagers(), this.secureRandomImplementation);
+        if ((wantClientAuth || needClientAuth) && truststore != null && mode == Mode.SERVER) {
+            TrustManager[] trustManagers = tmf.getTrustManagers();
+            TrustManager reloadableTrustManager = new ReloadableX509TrustManager(truststore, tmf);
+
+            for (int i = 0; i < trustManagers.length; i++) {
+                if (trustManagers[i] instanceof X509TrustManager) {
+                    trustManagers[i] = reloadableTrustManager;
+                }
+            }
+
+            sslContext.init(keyManagers, trustManagers, this.secureRandomImplementation);
+        } else {
+            sslContext.init(keyManagers, tmf.getTrustManagers(), this.secureRandomImplementation);
+        }
+
         return sslContext;
     }
 
@@ -197,29 +214,4 @@ public class SslFactory implements Configurable {
             this.truststore = new SecurityStore(type, path, password);
         }
     }
-
-    private class SecurityStore {
-        private final String type;
-        private final String path;
-        private final Password password;
-
-        private SecurityStore(String type, String path, Password password) {
-            this.type = type == null ? KeyStore.getDefaultType() : type;
-            this.path = path;
-            this.password = password;
-        }
-
-        private KeyStore load() throws GeneralSecurityException, IOException {
-            FileInputStream in = null;
-            try {
-                KeyStore ks = KeyStore.getInstance(type);
-                in = new FileInputStream(path);
-                ks.load(in, password.value().toCharArray());
-                return ks;
-            } finally {
-                if (in != null) in.close();
-            }
-        }
-    }
-
 }
