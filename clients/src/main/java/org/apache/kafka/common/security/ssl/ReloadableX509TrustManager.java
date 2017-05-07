@@ -26,6 +26,7 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509ExtendedTrustManager;
 import javax.net.ssl.X509TrustManager;
+import java.io.IOException;
 import java.net.Socket;
 import java.security.KeyStore;
 import java.security.NoSuchAlgorithmException;
@@ -140,7 +141,18 @@ class ReloadableX509TrustManager extends X509ExtendedTrustManager implements X50
                 lastReload = System.currentTimeMillis();
             }
 
-        } catch (Exception ex) {
+        }
+        catch (IOException ex) {
+            log.warn("IO error while loading trust manager. {}", ex.getMessage());
+            try {
+                Thread.sleep(100);
+                reloadTrustManager();
+            } catch (InterruptedException e) {
+                log.warn("Failed to retry loading trust manager due to interrupted exception.");
+                Thread.currentThread().interrupt();
+            }
+        }
+        catch (Exception ex) {
             throw new KafkaException(ex);
         }
     }
