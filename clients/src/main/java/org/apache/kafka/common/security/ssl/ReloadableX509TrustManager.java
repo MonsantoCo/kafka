@@ -103,7 +103,7 @@ class ReloadableX509TrustManager extends X509ExtendedTrustManager implements X50
 
     private void reloadTrustManager() throws KafkaException {
         try {
-            log.warn("{}, {}", lastReload, trustStore.getLastModified());
+            log.debug("{}, {}", lastReload, trustStore.getLastModified());
             if (trustManager == null || trustStore.getLastModified() >= lastReload) {
                 trustKeyStore = trustStore.load();
 

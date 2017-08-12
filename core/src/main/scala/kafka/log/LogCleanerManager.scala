@@ -287,7 +287,7 @@ private[log] object LogCleanerManager extends Logging {
       if (offset < logStartOffset) {
         // don't bother with the warning if compact and delete are enabled.
         if (!isCompactAndDelete(log))
-          warn(s"Resetting first dirty offset to log start offset $logStartOffset since the checkpointed offset $offset is invalid.")
+          warn(s"Resetting first dirty offset for ${topicPartition.topic}:${topicPartition.partition} to log start offset $logStartOffset since the checkpointed offset $offset is invalid.")
         logStartOffset
       } else {
         offset
